@@ -177,11 +177,11 @@ export function JobDashboard({ profile }: Props) {
                     <span className="text-white">{parsed.experience || job.experienceRequired}</span>
                   </p>
                 )}
-                {(parsed.location || job.location) && (
+                {displayLocation && (
                   <p className="text-sm block">
                     <span className="font-bold text-slate-300">Location:</span>
                     <br />
-                    <span className="text-white">{parsed.location || job.location}</span>
+                    <span className="text-white">{displayLocation}</span>
                   </p>
                 )}
                 {parsed.requirements.length > 0 && (
