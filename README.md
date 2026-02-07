@@ -1,8 +1,10 @@
-# Resumatch — AI Job Finder & Resume Matcher
+# JobMatch.AI — AI Job Finder & Resume Matcher
 
 **Upload your resume. Get AI-matched jobs. Apply in one click.**
 
-Resumatch is a full-stack application that uses AI to parse your resume, discover relevant job listings, and score each match with a short explanation—so you spend less time searching and more time applying.
+JobMatch.AI is a full-stack application that uses AI to parse your resume, discover relevant job listings, and score each match with a short explanation—so you spend less time searching and more time applying.
+
+**Repository:** [github.com/GarvitUpreti/JobMatch.AI](https://github.com/GarvitUpreti/JobMatch.AI)
 
 ---
 
@@ -56,8 +58,8 @@ Resumatch is a full-stack application that uses AI to parse your resume, discove
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
-cd project
+git clone https://github.com/GarvitUpreti/JobMatch.AI.git
+cd JobMatch.AI
 ```
 
 ### 2. Backend setup

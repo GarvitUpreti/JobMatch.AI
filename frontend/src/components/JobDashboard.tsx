@@ -90,32 +90,34 @@ export function JobDashboard({ profile }: Props) {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <h2 className="font-display text-lg font-semibold text-white">Jobs</h2>
-        {profile && (
-          <label className="flex items-center gap-2 text-sm text-slate-400">
-            <input
-              type="checkbox"
-              checked={useMatch}
-              onChange={(e) => setUseMatch(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
-            />
-            AI match & score
-          </label>
-        )}
-        <form onSubmit={handleFilterSubmit} className="flex-1 flex gap-2 min-w-[200px]">
+    <section className="rounded-xl sm:rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <h2 className="font-display text-base sm:text-lg font-semibold text-white">Jobs</h2>
+          {profile && (
+            <label className="flex items-center gap-2 text-sm text-slate-400 touch-manipulation">
+              <input
+                type="checkbox"
+                checked={useMatch}
+                onChange={(e) => setUseMatch(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+              />
+              AI match & score
+            </label>
+          )}
+        </div>
+        <form onSubmit={handleFilterSubmit} className="flex flex-col sm:flex-row gap-2 w-full sm:flex-1 sm:min-w-0 min-w-0">
           <input
             type="text"
-            placeholder="Filter jobs by text (title, company, skills, location…)"
-            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            placeholder="Filter jobs (title, company, location…)"
+            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 sm:py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-2 text-sm font-medium text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 touch-manipulation shrink-0"
           >
             {loading ? '…' : 'Search'}
           </button>
@@ -130,7 +132,7 @@ export function JobDashboard({ profile }: Props) {
 
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-      <ul className="space-y-5">
+      <ul className="space-y-4 sm:space-y-5">
         {jobs.map((job) => {
           const parsed = parseJobDescription(job.description, job.title);
           const displayTitle = parsed.jobTitle || job.title;
@@ -140,21 +142,21 @@ export function JobDashboard({ profile }: Props) {
           return (
             <li
               key={job.id}
-              className="rounded-xl border border-slate-700/80 bg-slate-800/80 p-5 shadow-lg shadow-slate-900/50 hover:border-slate-600 hover:bg-slate-800 transition"
+              className="rounded-lg sm:rounded-xl border border-slate-700/80 bg-slate-800/80 p-4 sm:p-5 shadow-lg shadow-slate-900/50 hover:border-slate-600 hover:bg-slate-800 transition"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-display text-lg font-semibold text-white tracking-tight">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start justify-between gap-2 sm:gap-3">
+                <div className="min-w-0 w-full xs:flex-1">
+                  <h3 className="font-display text-base sm:text-lg font-semibold text-white tracking-tight break-words">
                     {displayTitle}
                   </h3>
-                  <p className="mt-2 text-sm">
+                  <p className="mt-1.5 sm:mt-2 text-sm break-words">
                     <span className="font-bold text-slate-300">Company:</span>
                     <br />
                     <span className="text-slate-200">{job.company}</span>
                   </p>
                 </div>
                 {job.score > 0 && (
-                  <span className="shrink-0 rounded-full bg-emerald-500/20 px-3 py-1.5 text-sm font-semibold text-emerald-400">
+                  <span className="shrink-0 rounded-full bg-emerald-500/20 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold text-emerald-400">
                     {job.score}% match
                   </span>
                 )}
@@ -183,9 +185,9 @@ export function JobDashboard({ profile }: Props) {
                   </p>
                 )}
                 {parsed.requirements.length > 0 && (
-                  <div className="text-sm block">
+                  <div className="text-xs sm:text-sm block">
                     <span className="font-bold text-slate-300">Job Requirements:</span>
-                    <ul className="list-disc list-inside text-slate-200 space-y-1 mt-1 ml-1">
+                    <ul className="list-disc list-inside text-slate-200 space-y-0.5 sm:space-y-1 mt-1 ml-1 break-words">
                       {parsed.requirements.slice(0, 8).map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
@@ -193,9 +195,9 @@ export function JobDashboard({ profile }: Props) {
                   </div>
                 )}
                 {parsed.responsibilities.length > 0 && (
-                  <div className="text-sm block">
+                  <div className="text-xs sm:text-sm block">
                     <span className="font-bold text-slate-300">Key Responsibilities:</span>
-                    <ul className="list-disc list-inside text-slate-200 space-y-1 mt-1 ml-1">
+                    <ul className="list-disc list-inside text-slate-200 space-y-0.5 sm:space-y-1 mt-1 ml-1 break-words">
                       {parsed.responsibilities.slice(0, 6).map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
@@ -230,7 +232,7 @@ export function JobDashboard({ profile }: Props) {
                 href={job.applyLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500 focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition"
+                className="mt-4 inline-block w-full sm:w-auto text-center rounded-lg bg-emerald-600 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500 active:bg-emerald-700 focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition touch-manipulation"
               >
                 Apply →
               </a>
@@ -240,12 +242,12 @@ export function JobDashboard({ profile }: Props) {
       </ul>
 
       {!loading && jobs.length < total && total > 0 && (
-        <div className="mt-6 flex justify-center">
+        <div className="mt-5 sm:mt-6 flex justify-center">
           <button
             type="button"
             onClick={loadMore}
             disabled={loadingMore}
-            className="rounded-xl border border-slate-600 bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:border-slate-500 transition disabled:opacity-50"
+            className="w-full sm:w-auto rounded-xl border border-slate-600 bg-slate-800 px-5 py-3 sm:py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700 active:bg-slate-600 hover:border-slate-500 transition disabled:opacity-50 touch-manipulation"
           >
             {loadingMore ? 'Loading…' : `Show more (${total - jobs.length} remaining)`}
           </button>
