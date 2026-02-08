@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
-import { matchJobs, getJobs, type ParsedResume, type ScoredJob } from '../api';
+import { matchJobs, getJobs, type ParsedResume, type ScoredJob, type JobFilters } from '../api';
 import { parseJobDescription } from '../utils/parseJobDescription';
 import { getPostedAgo } from '../utils/postedAgo';
 
 type Props = { profile: ParsedResume | null };
 
 export function JobDashboard({ profile }: Props) {
-  const [filter, setFilter] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [postedWithinSelect, setPostedWithinSelect] = useState<string>('');
+  const [postedWithinCustomDays, setPostedWithinCustomDays] = useState<string>('');
+  const [experienceSelect, setExperienceSelect] = useState<string>('');
+  const [experienceMinCustom, setExperienceMinCustom] = useState<string>('');
+  const [experienceMaxCustom, setExperienceMaxCustom] = useState<string>('');
+  const [compensationMin, setCompensationMin] = useState<string>('');
   const [jobs, setJobs] = useState<ScoredJob[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -15,27 +21,56 @@ export function JobDashboard({ profile }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [useMatch, setUseMatch] = useState(true);
 
+  const POSTED_DAYS_MIN = 1;
+  const POSTED_DAYS_MAX = 365;
+  const EXPERIENCE_YEARS_MAX = 30;
+
+  function buildFilters(): JobFilters {
+    const comp = parseInt(compensationMin, 10);
+    let postedWithin: number | undefined;
+    if (postedWithinSelect === '7' || postedWithinSelect === '14' || postedWithinSelect === '30') {
+      postedWithin = Number(postedWithinSelect);
+    } else if (postedWithinSelect === 'custom') {
+      const d = parseInt(postedWithinCustomDays, 10);
+      if (!Number.isNaN(d) && d >= POSTED_DAYS_MIN && d <= POSTED_DAYS_MAX) postedWithin = d;
+    }
+    let experienceMin: number | undefined;
+    let experienceMax: number | undefined;
+    if (experienceSelect === '1' || experienceSelect === '2' || experienceSelect === '5') {
+      experienceMax = Number(experienceSelect);
+    } else if (experienceSelect === 'custom') {
+      const minVal = parseInt(experienceMinCustom, 10);
+      const maxVal = parseInt(experienceMaxCustom, 10);
+      if (!Number.isNaN(minVal) && minVal >= 0 && minVal <= EXPERIENCE_YEARS_MAX) experienceMin = minVal;
+      if (!Number.isNaN(maxVal) && maxVal >= 0 && maxVal <= EXPERIENCE_YEARS_MAX) experienceMax = maxVal;
+    }
+    return {
+      keywords: keywords.trim() || undefined,
+      postedWithin,
+      experienceMin,
+      experienceMax,
+      compensationMin: !Number.isNaN(comp) && comp > 0 ? comp : undefined,
+    };
+  }
+
   async function load(reset = true) {
     if (reset) setPage(1);
     setError(null);
     setLoading(true);
+    const filters = buildFilters();
     try {
       const currentPage = reset ? 1 : page;
       if (useMatch && profile) {
         const { jobs: scored, total: t } = await matchJobs(
-          {
-            skills: profile.skills,
-            experience: profile.experience,
-            summary: profile.summary,
-          },
-          filter.trim() || undefined,
+          { skills: profile.skills, experience: profile.experience, summary: profile.summary },
+          filters,
           currentPage
         );
         setJobs(reset ? scored : (prev) => prev.concat(scored));
         setTotal(t);
         if (!reset) setPage((p) => p + 1);
       } else {
-        const { jobs: list, total: t } = await getJobs(filter.trim() || undefined, currentPage);
+        const { jobs: list, total: t } = await getJobs(filters, currentPage);
         const withScore = list.map((j) => ({ ...j, score: 0, reason: '' }));
         setJobs(reset ? withScore : (prev) => prev.concat(withScore));
         setTotal(t);
@@ -51,23 +86,20 @@ export function JobDashboard({ profile }: Props) {
 
   async function loadMore() {
     setLoadingMore(true);
+    const filters = buildFilters();
     try {
       const nextPage = page + 1;
       if (useMatch && profile) {
         const { jobs: scored, total: t } = await matchJobs(
-          {
-            skills: profile.skills,
-            experience: profile.experience,
-            summary: profile.summary,
-          },
-          filter.trim() || undefined,
+          { skills: profile.skills, experience: profile.experience, summary: profile.summary },
+          filters,
           nextPage
         );
         setJobs((prev) => prev.concat(scored));
         setTotal(t);
         setPage(nextPage);
       } else {
-        const { jobs: list, total: t } = await getJobs(filter.trim() || undefined, nextPage);
+        const { jobs: list, total: t } = await getJobs(filters, nextPage);
         const withScore = list.map((j) => ({ ...j, score: 0, reason: '' }));
         setJobs((prev) => prev.concat(withScore));
         setTotal(t);
@@ -106,21 +138,100 @@ export function JobDashboard({ profile }: Props) {
             </label>
           )}
         </div>
-        <form onSubmit={handleFilterSubmit} className="flex flex-col sm:flex-row gap-2 w-full sm:flex-1 sm:min-w-0 min-w-0">
-          <input
-            type="text"
-            placeholder="e.g. react, node, remote (multiple keywords)"
-            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 sm:py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-2 text-sm font-medium text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 touch-manipulation shrink-0"
-          >
-            {loading ? '…' : 'Search'}
-          </button>
+        <form onSubmit={handleFilterSubmit} className="w-full space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Keywords</label>
+              <input
+                type="text"
+                placeholder="e.g. react, node, remote"
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Posted within</label>
+              <select
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={postedWithinSelect}
+                onChange={(e) => setPostedWithinSelect(e.target.value)}
+              >
+                <option value="">Any</option>
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 2 weeks</option>
+                <option value="30">Last month</option>
+                <option value="custom">Custom (days)</option>
+              </select>
+              {postedWithinSelect === 'custom' && (
+                <input
+                  type="number"
+                  min={POSTED_DAYS_MIN}
+                  max={POSTED_DAYS_MAX}
+                  placeholder={`1–${POSTED_DAYS_MAX} days`}
+                  className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  value={postedWithinCustomDays}
+                  onChange={(e) => setPostedWithinCustomDays(e.target.value)}
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Experience year range</label>
+              <select
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={experienceSelect}
+                onChange={(e) => setExperienceSelect(e.target.value)}
+              >
+                <option value="">Any</option>
+                <option value="1">Max &lt; 1 year</option>
+                <option value="2">Max 1–2 years</option>
+                <option value="5">Max 2–5 years</option>
+                <option value="custom">Add manually (min / max years)</option>
+              </select>
+              {experienceSelect === 'custom' && (
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={EXPERIENCE_YEARS_MAX}
+                    placeholder="Min years"
+                    className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    value={experienceMinCustom}
+                    onChange={(e) => setExperienceMinCustom(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={EXPERIENCE_YEARS_MAX}
+                    placeholder="Max years"
+                    className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    value={experienceMaxCustom}
+                    onChange={(e) => setExperienceMaxCustom(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Min compensation (optional)</label>
+              <input
+                type="number"
+                min={0}
+                placeholder="e.g. 50000"
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={compensationMin}
+                onChange={(e) => setCompensationMin(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 touch-manipulation"
+            >
+              {loading ? '…' : 'Search'}
+            </button>
+          </div>
         </form>
       </div>
 

@@ -18,6 +18,15 @@ export interface JobListing {
   applyLink: string;
   postedAt?: string;
   experienceRequired?: string;
+  salaryMin?: number;
+}
+
+export interface JobFilters {
+  keywords?: string;
+  postedWithin?: number;
+  experienceMin?: number;
+  experienceMax?: number;
+  compensationMin?: number;
 }
 
 export interface ScoredJob extends JobListing {
@@ -59,9 +68,13 @@ export interface MatchResponse {
   total: number;
 }
 
-export async function getJobs(q?: string, page = 1): Promise<JobsResponse> {
+export async function getJobs(filters: JobFilters, page = 1): Promise<JobsResponse> {
   const params = new URLSearchParams();
-  if (q) params.set('q', q);
+  if (filters.keywords) params.set('q', filters.keywords);
+  if (filters.postedWithin) params.set('postedWithin', String(filters.postedWithin));
+  if (filters.experienceMin != null) params.set('experienceMin', String(filters.experienceMin));
+  if (filters.experienceMax != null) params.set('experienceMax', String(filters.experienceMax));
+  if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
   if (page > 1) params.set('page', String(page));
   const url = `${API}/jobs${params.toString() ? `?${params}` : ''}`;
   const r = await fetch(url);
@@ -71,7 +84,7 @@ export async function getJobs(q?: string, page = 1): Promise<JobsResponse> {
 
 export async function matchJobs(
   profile: { skills: string[]; experience: string[]; summary: string },
-  textFilter?: string,
+  filters: JobFilters,
   page = 1
 ): Promise<MatchResponse> {
   const r = await fetch(`${API}/jobs/match`, {
@@ -79,7 +92,11 @@ export async function matchJobs(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...profile,
-      textFilter: textFilter || undefined,
+      keywords: filters.keywords || undefined,
+      postedWithin: filters.postedWithin,
+      experienceMin: filters.experienceMin,
+      experienceMax: filters.experienceMax,
+      compensationMin: filters.compensationMin,
       page,
     }),
   });

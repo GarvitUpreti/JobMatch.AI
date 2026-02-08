@@ -11,6 +11,16 @@ export interface JobListing {
   applyLink: string;
   postedAt?: string;
   experienceRequired?: string;
+  salaryMin?: number;
+}
+
+/** Explicit filter params from the 4-field form (no LLM). */
+export interface JobFilters {
+  keywords?: string;
+  postedWithinDays?: number;
+  experienceMinYears?: number;
+  experienceMaxYears?: number;
+  compensationMin?: number;
 }
 
 export interface ScoredJob extends JobListing {
@@ -155,6 +165,17 @@ const MOCK_JOBS: JobListing[] = [
 
 const RESULTS_PER_PAGE = 10;
 
+/** Structured criteria applied to job list (from 4-field form or LLM). */
+export interface StructuredFilter {
+  keywords: string[];
+  postedAfter: string | null;
+  locationKeywords: string[];
+  seniority: string | null;
+  experienceMinYears: number | null;
+  experienceMaxYears: number | null;
+  compensationMin: number | null;
+}
+
 /** Split filter string into multiple keywords (comma or space separated), trimmed and deduped. */
 function parseKeywords(textFilter?: string): string[] {
   if (!textFilter?.trim()) return [];
@@ -165,12 +186,136 @@ function parseKeywords(textFilter?: string): string[] {
   return [...new Set(keywords)];
 }
 
+/** Parse job's required experience into a single "max years" number (e.g. "4+ years" -> 4, "0-1 year" -> 1). Returns null if unknown. */
+function getMaxRequiredYears(job: JobListing): number | null {
+  const text = [job.experienceRequired, job.description, job.title].filter(Boolean).join(' ').toLowerCase();
+  const match = text.match(/(\d+)\+?\s*years?|(\d+)\s*[-–]\s*(\d+)\s*years?|(\d+)\s*years?\s*experience|experience\s*[-–]\s*(\d+)/i);
+  if (match) {
+    if (match[1]) return parseInt(match[1], 10);
+    if (match[2] && match[3]) return Math.max(parseInt(match[2], 10), parseInt(match[3], 10));
+    if (match[4]) return parseInt(match[4], 10);
+    if (match[5]) return parseInt(match[5], 10);
+  }
+  return null;
+}
+
+/** Parse job's required experience into a "min years" number (e.g. "3-5 years" -> 3, "4+ years" -> 4). Returns null if unknown. */
+function getMinRequiredYears(job: JobListing): number | null {
+  const text = [job.experienceRequired, job.description, job.title].filter(Boolean).join(' ').toLowerCase();
+  const match = text.match(/(\d+)\+?\s*years?|(\d+)\s*[-–]\s*(\d+)\s*years?|(\d+)\s*years?\s*experience|experience\s*[-–]\s*(\d+)/i);
+  if (match) {
+    if (match[1]) return parseInt(match[1], 10);
+    if (match[2] && match[3]) return Math.min(parseInt(match[2], 10), parseInt(match[3], 10));
+    if (match[4]) return parseInt(match[4], 10);
+    if (match[5]) return parseInt(match[5], 10);
+  }
+  return null;
+}
+
+/** Apply structured filter (postedAfter, location, seniority, experienceMaxYears) to a job list. */
+function applyStructuredFilter(jobs: JobListing[], filter: StructuredFilter): JobListing[] {
+  return jobs.filter((j) => {
+    if (filter.postedAfter && j.postedAt) {
+      if (j.postedAt < filter.postedAfter) return false;
+    }
+    if (filter.locationKeywords.length > 0) {
+      const loc = j.location.toLowerCase();
+      const match = filter.locationKeywords.some((kw) => loc.includes(kw.toLowerCase()));
+      if (!match) return false;
+    }
+    if (filter.seniority) {
+      const text = `${j.title} ${j.description}`.toLowerCase();
+      const seniority = filter.seniority.toLowerCase();
+      if (seniority === 'senior' && !/senior|lead|principal|staff/.test(text)) return false;
+      if (seniority === 'junior' && !/junior|entry-level|entry level/.test(text)) return false;
+      if (seniority === 'mid' && !/mid-level|mid level|medium|intermediate/.test(text)) return false;
+    }
+    if (filter.experienceMinYears != null) {
+      const jobMin = getMinRequiredYears(j);
+      if (jobMin != null && jobMin < filter.experienceMinYears) return false;
+    }
+    if (filter.experienceMaxYears != null) {
+      const jobMax = getMaxRequiredYears(j);
+      if (jobMax != null && jobMax > filter.experienceMaxYears) return false;
+    }
+    if (filter.compensationMin != null && filter.compensationMin > 0) {
+      const jobMin = job.salaryMin ?? 0;
+      if (jobMin < filter.compensationMin) return false;
+    }
+    return true;
+  });
+}
+
+/** Build StructuredFilter from the 4 explicit form fields (no LLM). */
+function buildStructuredFilterFromForm(filters: JobFilters): StructuredFilter {
+  const keywords = parseKeywords(filters.keywords);
+  let postedAfter: string | null = null;
+  if (filters.postedWithinDays != null && filters.postedWithinDays > 0) {
+    postedAfter = new Date(Date.now() - filters.postedWithinDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+  return {
+    keywords,
+    postedAfter,
+    locationKeywords: [],
+    seniority: null,
+    experienceMinYears: filters.experienceMinYears ?? null,
+    experienceMaxYears: filters.experienceMaxYears ?? null,
+    compensationMin: filters.compensationMin ?? null,
+  };
+}
+
 @Injectable()
 export class JobsService {
   constructor(private readonly groq: GroqService) {}
 
   private isAdzunaConfigured(): boolean {
     return !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY);
+  }
+
+  /** Use LLM to parse natural-language filter into structured criteria. */
+  private async parseFilterPrompt(userText: string): Promise<StructuredFilter> {
+    const today = new Date().toISOString().slice(0, 10);
+    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const system = `You are a job search filter parser. The user typed a natural language filter for job listings. Extract structured criteria. Today is ${today}. Reply with ONLY valid JSON, no markdown or explanation. Use this exact schema:
+{ "keywords": ["word1", "word2"], "postedAfter": "YYYY-MM-DD" or null, "locationKeywords": ["remote", "city name"], "seniority": "senior" or "junior" or "mid" or null, "experienceMaxYears": number or null }
+Rules:
+- "past 2 weeks", "last 2 weeks", "recent", "posted in last 2 weeks" -> set postedAfter to "${twoWeeksAgo}" (exactly this date).
+- "remote" or "work from home" -> add "remote" to locationKeywords.
+- "senior" or "lead" -> seniority "senior". "junior" or "entry" -> seniority "junior".
+- "required experience less than 1 year", "less than 1 year experience", "entry level", "0-1 year" -> experienceMaxYears: 1. "less than 2 years" -> 2. "less than 3 years" -> 3. If no experience filter, use null.
+- Put ONLY job/role/tech keywords in "keywords" (e.g. react, node, developer). Do NOT put filter words like "posted", "weeks", "experience", "year" in keywords. If no job keywords, use empty array [].`;
+    const user = `User input: ${userText}`;
+    const raw = await this.groq.chat(system, user);
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    let result: StructuredFilter;
+    try {
+      const parsed = JSON.parse(cleaned);
+      const postedAfter = typeof parsed.postedAfter === 'string' ? parsed.postedAfter : null;
+      result = {
+        keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+        postedAfter,
+        locationKeywords: Array.isArray(parsed.locationKeywords) ? parsed.locationKeywords : [],
+        seniority: typeof parsed.seniority === 'string' ? parsed.seniority : null,
+        experienceMinYears: typeof parsed.experienceMinYears === 'number' ? parsed.experienceMinYears : null,
+        experienceMaxYears: typeof parsed.experienceMaxYears === 'number' ? parsed.experienceMaxYears : null,
+        compensationMin: null,
+      };
+    } catch {
+      result = {
+        keywords: parseKeywords(userText),
+        postedAfter: null,
+        locationKeywords: [],
+        seniority: null,
+        experienceMinYears: null,
+        experienceMaxYears: null,
+        compensationMin: null,
+      };
+    }
+    const lower = userText.toLowerCase();
+    if (/last\s*2\s*weeks|past\s*2\s*weeks|2\s*weeks\s*ago|posted\s*in\s*last\s*2\s*weeks/.test(lower)) {
+      result.postedAfter = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    }
+    return result;
   }
 
   private async fetchAdzunaJobs(
@@ -202,6 +347,7 @@ export class JobsService {
         created?: string;
         location?: { display_name?: string };
         company?: { display_name?: string };
+        salary_min?: number;
       }>;
       count?: number;
     };
@@ -215,35 +361,42 @@ export class JobsService {
       skills: [],
       applyLink: r.redirect_url ?? '#',
       postedAt: r.created?.slice(0, 10),
+      salaryMin: r.salary_min ?? undefined,
     }));
     const total = data.count ?? (jobs.length < RESULTS_PER_PAGE ? (page - 1) * RESULTS_PER_PAGE + jobs.length : page * RESULTS_PER_PAGE + 1);
     return { jobs, total };
   }
 
-  async getJobs(textFilter?: string, page = 1): Promise<{ jobs: JobListing[]; total: number }> {
-    const keywords = parseKeywords(textFilter);
+  async getJobs(filters: JobFilters, page = 1): Promise<{ jobs: JobListing[]; total: number }> {
+    const structured = buildStructuredFilterFromForm(filters);
+
     if (this.isAdzunaConfigured()) {
-      const what = keywords.length > 0 ? keywords.join(' ') : 'developer';
-      return this.fetchAdzunaJobs(what, page);
+      const what = structured.keywords.length > 0 ? structured.keywords.join(' ') : 'developer';
+      const { jobs: fetched, total: rawTotal } = await this.fetchAdzunaJobs(what, page);
+      const filtered = applyStructuredFilter(fetched, structured);
+      const total = filtered.length >= RESULTS_PER_PAGE ? Math.max(rawTotal, filtered.length + 1) : filtered.length;
+      return { jobs: filtered, total };
     }
+
     let list = [...MOCK_JOBS];
-    if (keywords.length > 0) {
+    if (structured.keywords.length > 0) {
       list = list.filter((j) => {
         const title = j.title.toLowerCase();
         const company = j.company.toLowerCase();
         const location = j.location.toLowerCase();
         const description = j.description.toLowerCase();
         const skillStr = j.skills.map((s) => s.toLowerCase()).join(' ');
-        return keywords.some(
+        return structured.keywords.some(
           (kw) =>
-            title.includes(kw) ||
-            company.includes(kw) ||
-            location.includes(kw) ||
-            description.includes(kw) ||
-            skillStr.includes(kw),
+            title.includes(kw.toLowerCase()) ||
+            company.includes(kw.toLowerCase()) ||
+            location.includes(kw.toLowerCase()) ||
+            description.includes(kw.toLowerCase()) ||
+            skillStr.includes(kw.toLowerCase()),
         );
       });
     }
+    list = applyStructuredFilter(list, structured);
     const start = (page - 1) * RESULTS_PER_PAGE;
     const jobs = list.slice(start, start + RESULTS_PER_PAGE);
     return { jobs, total: list.length };
@@ -251,10 +404,10 @@ export class JobsService {
 
   async matchAndScoreJobs(
     resumeProfile: { skills: string[]; experience: string[]; summary: string },
-    textFilter?: string,
+    filters: JobFilters,
     page = 1,
   ): Promise<{ jobs: ScoredJob[]; total: number }> {
-    const { jobs, total } = await this.getJobs(textFilter, page);
+    const { jobs, total } = await this.getJobs(filters, page);
     if (jobs.length === 0) return { jobs: [], total };
 
     const system = `You are a job matching expert. Given a candidate profile and a list of jobs, score each job from 0-100 and give a short reason (1-2 sentences) why it fits or doesn't.
