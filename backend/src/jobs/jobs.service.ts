@@ -239,7 +239,7 @@ function applyStructuredFilter(jobs: JobListing[], filter: StructuredFilter): Jo
       if (jobMax != null && jobMax > filter.experienceMaxYears) return false;
     }
     if (filter.compensationMin != null && filter.compensationMin > 0) {
-      const jobMin = job.salaryMin ?? 0;
+      const jobMin = j.salaryMin ?? 0;
       if (jobMin < filter.compensationMin) return false;
     }
     return true;
