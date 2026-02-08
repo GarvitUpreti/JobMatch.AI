@@ -155,6 +155,16 @@ const MOCK_JOBS: JobListing[] = [
 
 const RESULTS_PER_PAGE = 10;
 
+/** Split filter string into multiple keywords (comma or space separated), trimmed and deduped. */
+function parseKeywords(textFilter?: string): string[] {
+  if (!textFilter?.trim()) return [];
+  const keywords = textFilter
+    .split(/[\s,]+/)
+    .map((k) => k.trim().toLowerCase())
+    .filter((k) => k.length > 0);
+  return [...new Set(keywords)];
+}
+
 @Injectable()
 export class JobsService {
   constructor(private readonly groq: GroqService) {}
@@ -211,20 +221,28 @@ export class JobsService {
   }
 
   async getJobs(textFilter?: string, page = 1): Promise<{ jobs: JobListing[]; total: number }> {
+    const keywords = parseKeywords(textFilter);
     if (this.isAdzunaConfigured()) {
-      return this.fetchAdzunaJobs(textFilter?.trim() || 'developer', page);
+      const what = keywords.length > 0 ? keywords.join(' ') : 'developer';
+      return this.fetchAdzunaJobs(what, page);
     }
     let list = [...MOCK_JOBS];
-    if (textFilter?.trim()) {
-      const q = textFilter.toLowerCase();
-      list = list.filter(
-        (j) =>
-          j.title.toLowerCase().includes(q) ||
-          j.company.toLowerCase().includes(q) ||
-          j.location.toLowerCase().includes(q) ||
-          j.description.toLowerCase().includes(q) ||
-          j.skills.some((s) => s.toLowerCase().includes(q)),
-      );
+    if (keywords.length > 0) {
+      list = list.filter((j) => {
+        const title = j.title.toLowerCase();
+        const company = j.company.toLowerCase();
+        const location = j.location.toLowerCase();
+        const description = j.description.toLowerCase();
+        const skillStr = j.skills.map((s) => s.toLowerCase()).join(' ');
+        return keywords.some(
+          (kw) =>
+            title.includes(kw) ||
+            company.includes(kw) ||
+            location.includes(kw) ||
+            description.includes(kw) ||
+            skillStr.includes(kw),
+        );
+      });
     }
     const start = (page - 1) * RESULTS_PER_PAGE;
     const jobs = list.slice(start, start + RESULTS_PER_PAGE);
@@ -272,7 +290,7 @@ Score based on skills overlap, experience relevance, and role seniority fit.`;
         const s = byId.get(j.id) ?? { score: 50, reason: 'No score.' };
         return { ...j, score: Math.min(100, Math.max(0, s.score)), reason: s.reason };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score); // Highest match score first
     return { jobs: scored, total };
   }
 }

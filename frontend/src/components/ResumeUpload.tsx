@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { uploadResume, parseResumeText, type ParsedResume } from '../api';
 
-type Props = { onParsed: (p: ParsedResume) => void };
+type Props = {
+  onParsed: (p: ParsedResume, name: string) => void;
+  onClearResume: () => void;
+  resumeName: string | null;
+};
 
-export function ResumeUpload({ onParsed }: Props) {
+export function ResumeUpload({ onParsed, onClearResume, resumeName }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState('');
@@ -15,12 +19,13 @@ export function ResumeUpload({ onParsed }: Props) {
     setLoading(true);
     try {
       const parsed = await uploadResume(file);
-      onParsed(parsed);
+      onParsed(parsed, file.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setLoading(false);
     }
+    e.target.value = '';
   }
 
   async function handlePaste() {
@@ -29,7 +34,7 @@ export function ResumeUpload({ onParsed }: Props) {
     setLoading(true);
     try {
       const parsed = await parseResumeText(pasteText);
-      onParsed(parsed);
+      onParsed(parsed, 'Pasted resume');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Parse failed');
     } finally {
@@ -40,6 +45,20 @@ export function ResumeUpload({ onParsed }: Props) {
   return (
     <section className="mb-6 sm:mb-10 rounded-xl sm:rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-6">
       <h2 className="font-display text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">Upload your resume</h2>
+      {resumeName && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 border border-slate-700">
+          <span className="text-sm text-slate-300">
+            <span className="font-semibold text-slate-200">Resume:</span> {resumeName}
+          </span>
+          <button
+            type="button"
+            onClick={onClearResume}
+            className="ml-auto rounded-md bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 active:bg-red-500/40 transition touch-manipulation"
+          >
+            Remove resume
+          </button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
         <label className="cursor-pointer rounded-xl bg-emerald-600 px-4 py-3 sm:py-2.5 text-sm font-medium text-white hover:bg-emerald-500 active:bg-emerald-700 transition text-center touch-manipulation">
           <input

@@ -109,7 +109,7 @@ export function JobDashboard({ profile }: Props) {
         <form onSubmit={handleFilterSubmit} className="flex flex-col sm:flex-row gap-2 w-full sm:flex-1 sm:min-w-0 min-w-0">
           <input
             type="text"
-            placeholder="Filter jobs (title, company, location…)"
+            placeholder="e.g. react, node, remote (multiple keywords)"
             className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 sm:py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -127,6 +127,11 @@ export function JobDashboard({ profile }: Props) {
       {!profile && (
         <p className="text-slate-500 text-sm mb-4">
           Upload or paste your resume above to get AI-matched jobs and compatibility scores.
+        </p>
+      )}
+      {profile && useMatch && jobs.length > 0 && (
+        <p className="text-slate-500 text-xs mb-3">
+          Results filtered by resume + keywords; sorted by match score (best first).
         </p>
       )}
 
